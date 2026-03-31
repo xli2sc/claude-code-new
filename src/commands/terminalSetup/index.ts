@@ -21,3 +21,4 @@ const terminalSetup = {
 } satisfies Command
 
 export default terminalSetup
+
