@@ -198,3 +198,4 @@ const bridgeKick = {
 } satisfies Command
 
 export default bridgeKick
+
