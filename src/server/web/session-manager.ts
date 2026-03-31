@@ -1,26 +1,87 @@
 import type { IPty } from "node-pty";
 import type { WebSocket } from "ws";
 import { SessionStore } from "./session-store.js";
+import type { AuthUser } from "./auth/adapter.js";
 
 export type { SessionInfo } from "./session-store.js";
+
+// ── Per-user hourly rate limiter ─────────────────────────────────────────────
+
+/**
+ * Tracks new-session creations per user within a rolling 1-hour window.
+ *
+ * `allow(userId)` is a non-destructive peek so callers can check eligibility
+ * before committing. `record(userId)` commits an attempt (call only on
+ * successful creation).
+ */
+export class UserHourlyRateLimiter {
+  private readonly attempts = new Map<string, number[]>();
+  private readonly maxPerHour: number;
+
+  constructor(maxPerHour: number) {
+    this.maxPerHour = maxPerHour;
+    setInterval(() => this.cleanup(), 5 * 60_000).unref();
+  }
+
+  allow(userId: string): boolean {
+    return this.recent(userId).length < this.maxPerHour;
+  }
+
+  record(userId: string): void {
+    const r = this.recent(userId);
+    r.push(Date.now());
+    this.attempts.set(userId, r);
+  }
+
+  /** Seconds until the oldest attempt in the window falls off (for Retry-After). */
+  retryAfterSeconds(userId: string): number {
+    const r = this.recent(userId);
+    if (r.length === 0) return 0;
+    return Math.ceil((Math.min(...r) + 3_600_000 - Date.now()) / 1000);
+  }
+
+  private recent(userId: string): number[] {
+    const cutoff = Date.now() - 3_600_000;
+    const filtered = (this.attempts.get(userId) ?? []).filter((t) => t > cutoff);
+    this.attempts.set(userId, filtered);
+    return filtered;
+  }
+
+  private cleanup(): void {
+    const cutoff = Date.now() - 3_600_000;
+    for (const [id, ts] of this.attempts) {
+      const r = ts.filter((t) => t > cutoff);
+      if (r.length === 0) this.attempts.delete(id);
+      else this.attempts.set(id, r);
+    }
+  }
+}
+
+// ── SessionManager ────────────────────────────────────────────────────────────
 
 export class SessionManager {
   private store: SessionStore;
   private maxSessions: number;
-  private spawnPty: (cols: number, rows: number) => IPty;
+  private maxSessionsPerUser: number;
+  private spawnPty: (cols: number, rows: number, user?: AuthUser) => IPty;
+  private rateLimiter: UserHourlyRateLimiter;
   // Tracks which sessions have already had their PTY event listeners wired,
   // so we don't double-register on reconnect.
   private wiredPtys = new Set<string>();
 
   constructor(
     maxSessions: number,
-    spawnPty: (cols: number, rows: number) => IPty,
+    spawnPty: (cols: number, rows: number, user?: AuthUser) => IPty,
     gracePeriodMs?: number,
     scrollbackBytes?: number,
+    maxSessionsPerUser?: number,
+    maxSessionsPerHour?: number,
   ) {
     this.maxSessions = maxSessions;
+    this.maxSessionsPerUser = maxSessionsPerUser ?? maxSessions;
     this.spawnPty = spawnPty;
     this.store = new SessionStore(gracePeriodMs, scrollbackBytes);
+    this.rateLimiter = new UserHourlyRateLimiter(maxSessionsPerHour ?? 100);
   }
 
   get activeCount(): number {
@@ -39,18 +100,70 @@ export class SessionManager {
     return this.store.list();
   }
 
+  /** All sessions in the shape expected by the admin dashboard. */
+  getAllSessions(): Array<{ id: string; userId: string; createdAt: number }> {
+    return this.store.getAll().map((s) => ({
+      id: s.token,
+      userId: s.userId,
+      createdAt: s.createdAt.getTime(),
+    }));
+  }
+
+  /** Sessions owned by a specific user — used by the per-user API. */
+  getUserSessions(userId: string) {
+    return this.store.listByUser(userId);
+  }
+
+  isUserAtConcurrentLimit(userId: string): boolean {
+    return this.store.countByUser(userId) >= this.maxSessionsPerUser;
+  }
+
+  isUserRateLimited(userId: string): boolean {
+    return !this.rateLimiter.allow(userId);
+  }
+
+  retryAfterSeconds(userId: string): number {
+    return this.rateLimiter.retryAfterSeconds(userId);
+  }
+
   /**
    * Spawns a new PTY, registers it in the session store, and wires up all
    * event plumbing between the PTY and the WebSocket.
    *
    * Returns the session token, or null if at capacity or PTY spawn fails.
+   * When `user` is provided the session is associated with that user and
+   * per-user limits are enforced.
    */
-  create(ws: WebSocket, cols = 80, rows = 24): string | null {
+  create(ws: WebSocket, cols = 80, rows = 24, user?: AuthUser): string | null {
     if (this.isFull) return null;
+
+    const userId = user?.id ?? "default";
+
+    if (this.isUserAtConcurrentLimit(userId)) {
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          message: `Session limit reached for your account (max ${this.maxSessionsPerUser}).`,
+        }),
+      );
+      ws.close(1013, "Per-user session limit reached");
+      return null;
+    }
+
+    if (this.isUserRateLimited(userId)) {
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          message: "Too many sessions created recently. Please wait before starting a new session.",
+        }),
+      );
+      ws.close(1013, "Rate limited");
+      return null;
+    }
 
     let pty: IPty;
     try {
-      pty = this.spawnPty(cols, rows);
+      pty = this.spawnPty(cols, rows, user);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unknown PTY spawn error";
@@ -61,7 +174,10 @@ export class SessionManager {
       return null;
     }
 
-    const session = this.store.register(pty);
+    // Record the creation only after a successful spawn.
+    this.rateLimiter.record(userId);
+
+    const session = this.store.register(pty, userId);
     session.ws = ws;
     const { token } = session;
 
@@ -69,7 +185,7 @@ export class SessionManager {
     this.wireWsEvents(token, ws, pty);
 
     console.log(
-      `[session ${token.slice(0, 8)}] Created (active: ${this.store.size}/${this.maxSessions})`,
+      `[session ${token.slice(0, 8)}] Created for user ${userId} (active: ${this.store.size}/${this.maxSessions})`,
     );
     return token;
   }

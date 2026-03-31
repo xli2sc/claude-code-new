@@ -34,7 +34,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const apply = () => {
       const resolved = resolve();
       setResolvedTheme(resolved);
-      document.documentElement.classList.toggle("dark", resolved === "dark");
+      // Dark is the default; add `.light` class for light theme
+      document.documentElement.classList.toggle("light", resolved === "light");
     };
 
     apply();

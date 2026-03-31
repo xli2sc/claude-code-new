@@ -15,14 +15,16 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const text = extractTextContent(message.content);
 
   return (
-    <div
+    <article
       className={cn(
         "flex gap-3 animate-fade-in",
         isUser && "flex-row-reverse"
       )}
+      aria-label={isUser ? "You" : isError ? "Error from Claude" : "Claude"}
     >
-      {/* Avatar */}
+      {/* Avatar — purely decorative, role conveyed by article label */}
       <div
+        aria-hidden="true"
         className={cn(
           "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5",
           isUser
@@ -33,11 +35,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         )}
       >
         {isUser ? (
-          <User className="w-4 h-4" />
+          <User className="w-4 h-4" aria-hidden="true" />
         ) : isError ? (
-          <AlertCircle className="w-4 h-4" />
+          <AlertCircle className="w-4 h-4" aria-hidden="true" />
         ) : (
-          <Bot className="w-4 h-4" />
+          <Bot className="w-4 h-4" aria-hidden="true" />
         )}
       </div>
 
@@ -64,10 +66,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             <MarkdownContent content={text} />
           )}
           {message.status === "streaming" && (
-            <span className="inline-block w-1.5 h-4 bg-current ml-0.5 animate-pulse-soft" />
+            <span
+              aria-hidden="true"
+              className="inline-block w-1.5 h-4 bg-current ml-0.5 animate-pulse-soft"
+            />
           )}
         </div>
       </div>
-    </div>
+    </article>
   );
 }

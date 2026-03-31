@@ -7,6 +7,8 @@ const DEFAULT_SCROLLBACK_BYTES = 100 * 1024; // 100 KB
 
 export type StoredSession = {
   token: string;
+  /** ID of the user who owns this session. */
+  userId: string;
   pty: IPty;
   scrollback: ScrollbackBuffer;
   ws: WebSocket | null;
@@ -17,6 +19,8 @@ export type StoredSession = {
 
 export type SessionInfo = {
   token: string;
+  /** ID of the user who owns this session. */
+  userId: string;
   created: string;
   lastActive: string;
   alive: boolean;
@@ -44,11 +48,13 @@ export class SessionStore {
 
   /**
    * Register a newly spawned PTY under a fresh session token.
+   * @param userId - ID of the owning user (defaults to "default" for single-user deployments).
    */
-  register(pty: IPty): StoredSession {
+  register(pty: IPty, userId = "default"): StoredSession {
     const token = crypto.randomUUID();
     const session: StoredSession = {
       token,
+      userId,
       pty,
       scrollback: new ScrollbackBuffer(this.scrollbackBytes),
       ws: null,
@@ -153,10 +159,30 @@ export class SessionStore {
   list(): SessionInfo[] {
     return [...this.sessions.values()].map((s) => ({
       token: s.token,
+      userId: s.userId,
       created: s.createdAt.toISOString(),
       lastActive: s.lastActive.toISOString(),
       alive: s.ws !== null && s.ws.readyState === 1 /* OPEN */,
     }));
+  }
+
+  /** Returns summary info for sessions owned by a specific user. */
+  listByUser(userId: string): SessionInfo[] {
+    return this.list().filter((s) => s.userId === userId);
+  }
+
+  /** How many sessions are owned by the given user. */
+  countByUser(userId: string): number {
+    let n = 0;
+    for (const s of this.sessions.values()) {
+      if (s.userId === userId) n++;
+    }
+    return n;
+  }
+
+  /** Returns all raw StoredSession objects (used internally by SessionManager). */
+  getAll(): StoredSession[] {
+    return [...this.sessions.values()];
   }
 
   get size(): number {

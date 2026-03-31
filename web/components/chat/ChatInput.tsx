@@ -118,12 +118,16 @@ export function ChatInput({ conversationId }: ChatInputProps) {
         >
           <button
             className="p-1 text-surface-500 hover:text-surface-300 transition-colors flex-shrink-0 mb-0.5"
-            title="Attach file"
+            aria-label="Attach file"
           >
-            <Paperclip className="w-4 h-4" />
+            <Paperclip className="w-4 h-4" aria-hidden="true" />
           </button>
 
+          <label htmlFor="chat-input" className="sr-only">
+            Message
+          </label>
           <textarea
+            id="chat-input"
             ref={textareaRef}
             value={input}
             onChange={(e) => {
@@ -133,6 +137,7 @@ export function ChatInput({ conversationId }: ChatInputProps) {
             onKeyDown={handleKeyDown}
             placeholder="Message Claude Code..."
             rows={1}
+            aria-label="Message"
             className={cn(
               "flex-1 resize-none bg-transparent text-sm text-surface-100",
               "placeholder:text-surface-500 focus:outline-none",
@@ -143,24 +148,25 @@ export function ChatInput({ conversationId }: ChatInputProps) {
           {isStreaming ? (
             <button
               onClick={handleStop}
+              aria-label="Stop generation"
               className="p-1.5 rounded-lg bg-surface-700 text-surface-300 hover:bg-surface-600 transition-colors flex-shrink-0"
-              title="Stop generation"
             >
-              <Square className="w-4 h-4" />
+              <Square className="w-4 h-4" aria-hidden="true" />
             </button>
           ) : (
             <button
               onClick={handleSubmit}
               disabled={!input.trim()}
+              aria-label="Send message"
+              aria-disabled={!input.trim()}
               className={cn(
                 "p-1.5 rounded-lg transition-colors flex-shrink-0",
                 input.trim()
                   ? "bg-brand-600 text-white hover:bg-brand-700"
                   : "bg-surface-700 text-surface-500 cursor-not-allowed"
               )}
-              title="Send message"
             >
-              <Send className="w-4 h-4" />
+              <Send className="w-4 h-4" aria-hidden="true" />
             </button>
           )}
         </div>

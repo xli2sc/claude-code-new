@@ -5,6 +5,7 @@ import { useTheme } from "./ThemeProvider";
 import { useChatStore } from "@/lib/store";
 import { MODELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 
 export function Header() {
   const { theme, setTheme } = useTheme();
@@ -27,7 +28,11 @@ export function Header() {
 
       <div className="flex items-center gap-2">
         {/* Model selector */}
+        <label htmlFor="model-select" className="sr-only">
+          Model
+        </label>
         <select
+          id="model-select"
           value={settings.model}
           onChange={(e) => updateSettings({ model: e.target.value })}
           className={cn(
@@ -42,13 +47,16 @@ export function Header() {
           ))}
         </select>
 
+        {/* Notification center */}
+        <NotificationCenter />
+
         {/* Theme toggle */}
         <button
           onClick={() => setTheme(nextTheme)}
-          className="p-1.5 rounded-md text-surface-400 hover:text-surface-100 hover:bg-surface-800 transition-colors"
-          title={`Switch to ${nextTheme} theme`}
+          aria-label={`Switch to ${nextTheme} theme`}
+          className="p-1.5 rounded-md text-surface-400 hover:text-surface-100 hover:bg-surface-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         >
-          <ThemeIcon className="w-4 h-4" />
+          <ThemeIcon className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
     </header>
