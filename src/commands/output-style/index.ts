@@ -9,3 +9,4 @@ const outputStyle = {
 } satisfies Command
 
 export default outputStyle
+
