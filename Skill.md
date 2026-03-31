@@ -216,3 +216,4 @@ Some features are also gated via `process.env.USER_TYPE === 'ant'`.
 6. Respect the permission system — tools that modify state must implement `checkPermissions()`.
 7. Use lazy imports when adding dependencies that could create circular references.
 8. Update this file as project conventions evolve.
+
