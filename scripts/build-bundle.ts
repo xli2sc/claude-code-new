@@ -6,10 +6,17 @@
 // Watch mode:       bun scripts/build-bundle.ts --watch
 
 import * as esbuild from 'esbuild'
-import { resolve } from 'path'
-import { chmodSync, readFileSync } from 'fs'
+import { resolve, dirname } from 'path'
+import { chmodSync, readFileSync, existsSync } from 'fs'
+import { fileURLToPath } from 'url'
 
-const ROOT = resolve(import.meta.dir, '..')
+// Bun: import.meta.dir — Node 21+: import.meta.dirname — fallback
+const __dir: string =
+  (import.meta as any).dir ??
+  (import.meta as any).dirname ??
+  dirname(fileURLToPath(import.meta.url))
+
+const ROOT = resolve(__dir, '..')
 const watch = process.argv.includes('--watch')
 const minify = process.argv.includes('--minify')
 const noSourcemap = process.argv.includes('--no-sourcemap')
@@ -17,6 +24,44 @@ const noSourcemap = process.argv.includes('--no-sourcemap')
 // Read version from package.json for MACRO injection
 const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8'))
 const version = pkg.version || '0.0.0-dev'
+
+// ── Plugin: resolve bare 'src/' imports (tsconfig baseUrl: ".") ──
+// The codebase uses `import ... from 'src/foo/bar.js'` which relies on
+// TypeScript's baseUrl resolution. This plugin maps those to real TS files.
+const srcResolverPlugin: esbuild.Plugin = {
+  name: 'src-resolver',
+  setup(build) {
+    build.onResolve({ filter: /^src\// }, (args) => {
+      const basePath = resolve(ROOT, args.path)
+
+      // Already exists as-is
+      if (existsSync(basePath)) {
+        return { path: basePath }
+      }
+
+      // Strip .js/.jsx and try TypeScript extensions
+      const withoutExt = basePath.replace(/\.(js|jsx)$/, '')
+      for (const ext of ['.ts', '.tsx', '.js', '.jsx']) {
+        const candidate = withoutExt + ext
+        if (existsSync(candidate)) {
+          return { path: candidate }
+        }
+      }
+
+      // Try as directory with index file
+      const dirPath = basePath.replace(/\.(js|jsx)$/, '')
+      for (const ext of ['.ts', '.tsx', '.js', '.jsx']) {
+        const candidate = resolve(dirPath, 'index' + ext)
+        if (existsSync(candidate)) {
+          return { path: candidate }
+        }
+      }
+
+      // Let esbuild handle it (will error if truly missing)
+      return undefined
+    })
+  },
+}
 
 const buildOptions: esbuild.BuildOptions = {
   entryPoints: [resolve(ROOT, 'src/entrypoints/cli.tsx')],
@@ -30,8 +75,10 @@ const buildOptions: esbuild.BuildOptions = {
   // Single-file output — no code splitting for CLI tools
   splitting: false,
 
-  // Inject the MACRO global before all other code
-  inject: [resolve(ROOT, 'src/shims/macro.ts')],
+  plugins: [srcResolverPlugin],
+
+  // Use tsconfig for baseUrl / paths resolution (complements plugin above)
+  tsconfig: resolve(ROOT, 'tsconfig.json'),
 
   // Alias bun:bundle to our runtime shim
   alias: {
@@ -50,6 +97,11 @@ const buildOptions: esbuild.BuildOptions = {
     'node:*',
     // Native addons that can't be bundled
     'fsevents',
+    'sharp',
+    'image-processor-napi',
+    // Anthropic-internal packages (not published externally)
+    '@anthropic-ai/sandbox-runtime',
+    '@anthropic-ai/claude-agent-sdk',
   ],
 
   jsx: 'automatic',
@@ -64,9 +116,14 @@ const buildOptions: esbuild.BuildOptions = {
   treeShaking: true,
 
   // Define replacements — inline constants at build time
-  // Eliminates process.env.USER_TYPE === 'ant' branches (Anthropic-internal code)
-  // Sets NODE_ENV to production for production builds
+  // MACRO.* — originally inlined by Bun's bundler at compile time
+  // process.env.USER_TYPE — eliminates 'ant' (Anthropic-internal) code branches
   define: {
+    'MACRO.VERSION': JSON.stringify(version),
+    'MACRO.PACKAGE_URL': JSON.stringify('@anthropic-ai/claude-code'),
+    'MACRO.ISSUES_EXPLAINER': JSON.stringify(
+      'report issues at https://github.com/anthropics/claude-code/issues'
+    ),
     'process.env.USER_TYPE': '"external"',
     'process.env.NODE_ENV': minify ? '"production"' : '"development"',
   },
