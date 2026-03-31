@@ -12,3 +12,4 @@ export default {
   load: () => import('./effort.js'),
 } satisfies Command
 
+
