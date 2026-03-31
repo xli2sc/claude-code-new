@@ -12,3 +12,4 @@ const privacySettings = {
 } satisfies Command
 
 export default privacySettings
+
