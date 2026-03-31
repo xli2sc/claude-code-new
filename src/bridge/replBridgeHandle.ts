@@ -35,3 +35,4 @@ export function getSelfBridgeCompatId(): string | undefined {
   return h ? toCompatSessionId(h.bridgeSessionId) : undefined
 }
 
+
