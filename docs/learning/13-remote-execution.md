@@ -99,16 +99,15 @@ sequenceDiagram
 
 ```mermaid
 graph LR
-    subgraph "接收（WebSocket）"
-        WS[SessionsWebSocket<br/>wss://api.anthropic.com/v1/sessions/ws/{id}/subscribe]
-        WS --> EVENTS[事件流<br/>assistant/user/result/control]
-    end
+    CCR_OUT[CCR 容器] -->|推送事件| WS[WebSocket<br/>wss://.../v1/sessions/ws/id/subscribe]
+    WS --> LOCAL_IN[本地 CLI<br/>接收 assistant/user/result/control]
 
-    subgraph "发送（HTTP POST）"
-        POST[sendEventToRemoteSession<br/>POST /v1/sessions/{id}/events]
-        INTERRUPT[cancelSession<br/>POST /v1/sessions/{id}/interrupt]
-        PERM_RESP[respondToPermission<br/>POST /v1/sessions/{id}/control]
-    end
+    LOCAL_OUT[本地 CLI] -->|用户输入| POST[POST /v1/sessions/id/events]
+    LOCAL_OUT -->|取消| INTERRUPT[POST /v1/sessions/id/interrupt]
+    LOCAL_OUT -->|权限回复| PERM[POST /v1/sessions/id/control]
+    POST --> CCR_IN[CCR 容器]
+    INTERRUPT --> CCR_IN
+    PERM --> CCR_IN
 ```
 
 **为什么用两个通道？** WebSocket 是服务端 → 客户端的推送（事件流），HTTP 是客户端 → 服务端的请求（用户输入、权限回复）。
