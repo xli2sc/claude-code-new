@@ -21,7 +21,8 @@
 | 11 | [Voice & Buddy](11-voice-and-buddy.md) | 语音 STT 管道、伴侣精灵生成与动画 | 进阶 |
 | 12 | [基础设施](12-infrastructure.md) | Bootstrap 状态、Remote Settings、MCP Server、Docker | 进阶 |
 | 13 | [远程 Agent 执行](13-remote-execution.md) | **CCR 云端执行、Triggers 定时调度、Ultraplan、BYOC** | 高级 |
-| 14 | [Feature Flags 专题](14-feature-flags.md) | **87 个 flags 分类、Kairos 系统、功能组合分析** | 索引 |
+| 14 | [Feature Flags 专题](14-feature-flags.md) | **87 个 flags 分类、功能组合分析** | 索引 |
+| 15 | [KAIROS 系统](15-kairos.md) | **后台自主 Agent：Brief、Dream、Channels、Cron、Daemon** | 高级 |
 
 ## 建议阅读顺序
 
