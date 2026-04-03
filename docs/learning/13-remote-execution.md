@@ -362,12 +362,12 @@ graph TB
 
 ```mermaid
 flowchart TB
-    TOKEN[/run/ccr/session_token] --> READ[读取 token]
-    READ --> PRCTL["prctl(PR_SET_DUMPABLE, 0)<br/>阻止 ptrace"]
-    PRCTL --> UNLINK[删除 token 文件<br/>只存在于进程堆中]
-    UNLINK --> CA[下载 CA 证书<br/>拼接系统 CA bundle]
-    CA --> RELAY[启动 CONNECT→WebSocket relay<br/>127.0.0.1:port]
-    RELAY --> ENV["设置环境变量<br/>HTTPS_PROXY=http://127.0.0.1:port<br/>SSL_CERT_FILE=ca-bundle.crt"]
+    TOKEN["/run/ccr/session_token"] --> READ[读取 token]
+    READ --> PRCTL["prctl(PR_SET_DUMPABLE, 0)\n阻止 ptrace"]
+    PRCTL --> UNLINK["删除 token 文件\n只存在于进程堆中"]
+    UNLINK --> CA["下载 CA 证书\n拼接系统 CA bundle"]
+    CA --> RELAY["启动 CONNECT→WebSocket relay\n127.0.0.1:port"]
+    RELAY --> ENV["设置环境变量\nHTTPS_PROXY=http://127.0.0.1:port\nSSL_CERT_FILE=ca-bundle.crt"]
 ```
 
 **NO_PROXY 排除**（不走代理的域名）：
