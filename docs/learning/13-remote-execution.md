@@ -128,17 +128,17 @@ Ping/Pong 每 30 秒保活。
 
 ```mermaid
 flowchart TB
-    POLL[每 1s 轮询] --> FETCH[GET /events?after=lastEventId<br/>最多 50 页]
+    POLL[每 1s 轮询] --> FETCH["GET /events?after=lastEventId\n最多 50 页"]
     FETCH --> PROCESS[处理新事件]
-    PROCESS --> UPDATE[更新 task.log + 磁盘输出]
+    PROCESS --> UPDATE["更新 task.log + 磁盘输出"]
     UPDATE --> CHECK{完成检测}
 
-    CHECK -->|session archived| DONE[完成]
-    CHECK -->|result message| DONE
-    CHECK -->|自定义 checker 返回非 null| DONE
-    CHECK -->|稳定 idle (连续 5 次)| DONE
-    CHECK -->|超时 (30min for review)| DONE
     CHECK -->|以上都不是| POLL
+    CHECK -->|完成条件满足| DONE[任务完成]
+
+    DONE --- NOTE["完成条件：\n1. session archived\n2. result message\n3. 自定义 checker 返回非 null\n4. 稳定 idle 连续 5 次\n5. 超时 30min for review"]
+
+    style NOTE fill:#f0f0f0,stroke:#999,stroke-dasharray: 5 5
 ```
 
 ### 稳定 Idle 防误判
